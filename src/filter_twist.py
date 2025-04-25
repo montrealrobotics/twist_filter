@@ -1,108 +1,158 @@
-#!/usr/bin/env python
-import rospy
+#!/usr/bin/env python3
 import math
 import copy
 from geometry_msgs.msg import Twist
-from dynamic_reconfigure.server import Server
-from twist_filter.cfg import FilterConfig
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+import threading
+import rclpy
+from rcl_interfaces.msg import SetParametersResult
 
 
-class TwistFilter(object):
-    def __init__(self, components):
-        # Set component filters
+class TwistFilter:
+    def __init__(self, node, components):
+        self.node = node
+
         self.filters = components
 
-        # Set filter parameters
-        self.linear_vel_max = 1
-        self.linear_acc_max = 1
-        self.angular_vel_max = 1
-        self.angular_acc_max = 1
+        self.linear_vel_max = 1.0
+        self.linear_acc_max = 1.0
+        self.angular_vel_max = 1.0
+        self.angular_acc_max = 1.0
         self.timeout = 0.25
-        self.dyn_server = Server(FilterConfig, self.dyn_callback)
+        self.last_val = 0
+        self.lock = threading.Lock()
 
-        # Set prev values
-        self.time_prev = rospy.Time.now()
+        self._declare_parameters()
+
+        self.node.add_on_set_parameters_callback(self._parameters_callback)
+
+        self.time_prev = self.node.get_clock().now()
         self.twist_prev = Twist()
 
-        # Set up publishers/subscribers
-        self.sub_cmd_in = rospy.Subscriber('filter_in', Twist, self.update_twist)
-        self.pub_cmd_out = rospy.Publisher('filter_out', Twist, queue_size=10)
+        self.sub_cmd_in = self.node.create_subscription(
+            Twist,
+            'filter_in',
+            self.update_twist,
+            10
+        )
+        self.pub_cmd_out = self.node.create_publisher(
+            Twist,
+            'filter_out',
+            10
+        )
 
         # Uncomment to publish smoothed twist without velocity/acceleration filtering
-        # self.pub_cmd_smoothed = rospy.Publisher('filter_smooth', Twist, queue_size=10)
+        # self.pub_cmd_smoothed = self.node.create_publisher(Twist, 'filter_smooth', 10)
 
-        # Start command publisher
         self.stopped = False
         self.cmd = Twist()
-        self.prev_time = rospy.Time.now()
-        self.cmd_publisher = rospy.Timer(rospy.Duration(1.0/50.0), self.pub_cmd)
+        self.prev_time = self.node.get_clock().now()
+        self.cmd_publisher = self.node.create_timer(1.0/10.0, self.pub_cmd)
 
-        rospy.loginfo(rospy.get_name() + ': Twist filters ready!')
+        self.node.get_logger().info(f'{self.node.get_name()}: Twist filters ready!')
 
-    def dyn_callback(self, config, level):
-        rospy.loginfo("""Filter Reconfigure Request: Linear vel max: {linear_vel_max}, Linear acc max: {linear_acc_max}, \
-            Angular vel max:{angular_vel_max}, Angular acc max: {angular_acc_max}, Timeout: {timeout}, \
-            Number of samples: {num_samples}, Weights: {weights}, \
-            Number of output samples: {num_out_samples}, Output weights: {out_weights}""".format(**config))
+    def _declare_parameters(self):
+        """Declare all the parameters for the filter"""
 
-        # Component filter update
-        self.filters.update_filters(config)
+        double_descriptor = ParameterDescriptor(type=ParameterType.PARAMETER_DOUBLE)
 
-        # Twist filter update
-        self.linear_vel_max = config['linear_vel_max']
-        self.linear_acc_max = config['linear_acc_max']
-        self.angular_vel_max = config['angular_vel_max']
-        self.angular_acc_max = config['angular_acc_max']
-        self.timeout = config['timeout']
-        return config
+        self.node.declare_parameter('linear_vel_max', 1.0, double_descriptor)
+        self.node.declare_parameter('linear_acc_max', 1.0, double_descriptor)
+        self.node.declare_parameter('angular_vel_max', 1.0, double_descriptor)
+        self.node.declare_parameter('angular_acc_max', 1.0, double_descriptor)
+        self.node.declare_parameter('timeout', 0.25, double_descriptor)
+
+        self.linear_vel_max = self.node.get_parameter('linear_vel_max').value
+        self.linear_acc_max = self.node.get_parameter('linear_acc_max').value
+        self.angular_vel_max = self.node.get_parameter('angular_vel_max').value
+        self.angular_acc_max = self.node.get_parameter('angular_acc_max').value
+        self.timeout = self.node.get_parameter('timeout').value
+
+    def _parameters_callback(self, params):
+        """Callback for parameter updates"""
+
+        for param in params:
+            print(param.name)
+            if param.name == 'linear_vel_max':
+                self.linear_vel_max = param.value
+            elif param.name == 'linear_acc_max':
+                self.linear_acc_max = param.value
+            elif param.name == 'angular_vel_max':
+                self.angular_vel_max = param.value
+            elif param.name == 'angular_acc_max':
+                self.angular_acc_max = param.value
+            elif param.name == 'timeout':
+                self.timeout = param.value
+
+        result = self.filters.update_filters(params)
+
+        self.node.get_logger().info(
+            f"Filter Reconfigure: Linear vel max: {self.linear_vel_max}, "
+            f"Linear acc max: {self.linear_acc_max}, "
+            f"Angular vel max: {self.angular_vel_max}, "
+            f"Angular acc max: {self.angular_acc_max}, "
+            f"Timeout: {self.timeout}"
+        )
+
+        result = SetParametersResult()
+        if result:
+            result.successful = True
+        else:
+            result.successful = False
+        return result
 
     def update_twist(self, data):
-        self.cmd = data
-        self.prev_time = rospy.Time.now()
+        with self.lock:
+            self.cmd = data
+            self.prev_time = self.node.get_clock().now()
 
-    def pub_cmd(self, event):
-        # Reset twist if we havent gotten an input for specified timeout
-        if rospy.Time.now().to_sec() - self.prev_time.to_sec() > self.timeout:
-            cmd = self.filter_twist(Twist())
-        # Otherwise calculate output twist
-        else:
-            cmd = self.filter_twist(self.cmd)
+    def pub_cmd(self):
+        with self.lock:
+            current_time = self.node.get_clock().now()
+            elapsed = (current_time.nanoseconds - self.prev_time.nanoseconds) / 1e9
 
-        # If a zero twist is calculated, publish only once
-        if cmd == Twist():
-            if not self.stopped:
-                self.pub_cmd_out.publish(cmd)
-                self.stopped = True
-        # Otherwise keep publishing
-        else:
-            self.stopped = False
-            if cmd is not None:
-                self.pub_cmd_out.publish(cmd)
+            if elapsed > self.timeout:
+                cmd = self.filter_twist(Twist())
+            else:
+                cmd = self.filter_twist(self.cmd)
+
+            is_zero_twist = (cmd.linear.x == 0.0 and cmd.linear.y == 0.0 and cmd.linear.z == 0.0 and
+                            cmd.angular.x == 0.0 and cmd.angular.y == 0.0 and cmd.angular.z == 0.0)
+
+            if is_zero_twist:
+                if not self.stopped:
+                    self.pub_cmd_out.publish(cmd)
+                    self.stopped = True
+            else:
+                self.stopped = False
+                if cmd is not None:
+                    self.pub_cmd_out.publish(cmd)
 
     def filter_twist(self, data):
-        # Get filtered response and scale to max linear and angular velocities
         cmd_out = Twist()
+        time_filter = self.node.get_clock().now().nanoseconds
         for key in self.filters.linear:
-            setattr(cmd_out.linear, key, self.filters.linear[key].filter_signal(getattr(data.linear, key)))
-        for key in self.filters.angular:
-            setattr(cmd_out.angular, key, self.filters.angular[key].filter_signal(getattr(data.angular, key)))
+            input_val = float(getattr(data.linear, key))
+            filtered_val = float(self.filters.linear[key].filter_signal(input_val, time_filter, advanced_filter=False))
+            setattr(cmd_out.linear, key, filtered_val)
 
+        for key in self.filters.angular:
+            input_val = float(getattr(data.angular, key))
+            filtered_val = float(self.filters.angular[key].filter_signal(input_val, time_filter, advanced_filter=True))
+
+            setattr(cmd_out.angular, key, filtered_val)
         # Uncomment to publish smoothed twist without velocity/acceleration filtering
         # self.pub_cmd_smoothed.publish(cmd_out)
 
-        # Get time step
-        time_now = rospy.Time.now()
-        time_delta = time_now.to_sec() - self.time_prev.to_sec()
+        time_now = self.node.get_clock().now()
+        time_delta = (time_now.nanoseconds - self.time_prev.nanoseconds) / 1e9
 
-        # Saturate at max velocities and scale
         if self.linear_vel_max > 0 or self.angular_vel_max > 0:
             cmd_out = self._saturate_vel(cmd_out, self.linear_vel_max, self.angular_vel_max)
 
-        # Saturate at max accelerations and scale
         if (self.linear_acc_max > 0 or self.angular_acc_max > 0) and time_delta > 0.00001:
             cmd_out = self._saturate_acc(cmd_out, self.linear_acc_max, self.angular_acc_max, time_delta)
 
-        # Update previous values
         self.twist_prev = cmd_out
         self.time_prev = time_now
 
@@ -157,13 +207,11 @@ class TwistFilter(object):
         @returns valid - Sorted array of valid ordered ratios (could be empty)
         '''
 
-        # Select ratios that are less than or equal to 1.0
         valid = []
         for r in ratios:
             if r <= 1.0:
                 valid.append(r)
 
-        # Sort array from smallest to largest
         if len(valid) > 1:
             valid.sort()
 
@@ -172,25 +220,17 @@ class TwistFilter(object):
     def _saturate_vel(self, v, l_max, a_max):
         sat_twist = copy.deepcopy(v)
 
-        # Saturate linear
-        # Get magnitude
         mag = self._get_mag(sat_twist.linear)
 
-        # If magnitude is larger than max, saturate
         if mag > l_max:
-            # Get ratio of current mag and max mag
             ratio = l_max / mag
             sat_twist.linear.x *= ratio
             sat_twist.linear.y *= ratio
             sat_twist.linear.z *= ratio
 
-        # Saturate Angular
-        # Get magnitude
         mag = self._get_mag(sat_twist.angular)
 
-        # If magnitude is larger than max, saturate
         if mag > a_max:
-            # Get ratio of current mag and max mag
             ratio = a_max / mag
             sat_twist.angular.x *= ratio
             sat_twist.angular.y *= ratio
@@ -203,10 +243,8 @@ class TwistFilter(object):
     def _saturate_acc(self, v, l_max, a_max, time_delta):
         sat_twist = copy.deepcopy(v)
 
-        # Get acceleration
         acc = self._get_acc(sat_twist, time_delta)
 
-        # Saturate linear acceleration
         mag = self._get_mag(acc.linear)
         if mag > l_max:
             ratio = l_max / mag
@@ -214,7 +252,6 @@ class TwistFilter(object):
             acc.linear.y *= ratio
             acc.linear.z *= ratio
 
-        # Saturate angular acceleration
         mag = self._get_mag(acc.angular)
         if mag > a_max:
             ratio = a_max / mag
@@ -222,7 +259,6 @@ class TwistFilter(object):
             acc.angular.y *= ratio
             acc.angular.z *= ratio
 
-        # Calculate saturated twist
         sat_twist.linear.x = (acc.linear.x * time_delta) + self.twist_prev.linear.x
         sat_twist.linear.y = (acc.linear.y * time_delta) + self.twist_prev.linear.y
         sat_twist.linear.z = (acc.linear.z * time_delta) + self.twist_prev.linear.z
@@ -243,7 +279,6 @@ class TwistFilter(object):
 
         acc = Twist()
 
-        # Calculate acceleration for all twist components
         acc.linear.x = self._get_slope(v.linear.x, self.twist_prev.linear.x, time_delta)
         acc.linear.y = self._get_slope(v.linear.y, self.twist_prev.linear.y, time_delta)
         acc.linear.z = self._get_slope(v.linear.z, self.twist_prev.linear.z, time_delta)

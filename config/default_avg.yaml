@@ -1,8 +1,10 @@
-num_samples: 5
-weights: ''
+fir_twist_filter:
+  ros__parameters:
+    num_samples: 5
+    weights: '[]'
 
-linear_vel_max: 2.5
-linear_acc_max: 2.0
-angular_vel_max: 10.0
-angular_acc_max: 10.0
-timeout: 0.25
+    linear_vel_max: 1.0
+    linear_acc_max: 1.0
+    angular_vel_max: 2.0
+    angular_acc_max: 1.0
+    timeout: 0.25
