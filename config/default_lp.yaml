@@ -1,7 +1,7 @@
-fir_twist_filter:
+lp_twist_filter:
   ros__parameters:
-    num_samples: 5
-    weights: '[]'
+    tau: 0.5
+    damping: 0.8
 
     linear_vel_max: 1.0
     linear_acc_max: 1.0

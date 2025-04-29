@@ -3,7 +3,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-from launch.actions import LogInfo
+
 
 def generate_launch_description():
     active_filters_arg = DeclareLaunchArgument(
@@ -19,14 +19,14 @@ def generate_launch_description():
         'filter_config',
         default_value=PathJoinSubstitution([
             FindPackageShare('twist_filter'),
-            'config', 'default_fir.yaml'
+            'config', 'default_combo.yaml'
         ]),
         description='Path to filter configuration file'
     )
     
     filter_name_arg = DeclareLaunchArgument(
         'filter_name',
-        default_value='fir_twist_filter',
+        default_value='combo_twist_filter',
         description='Name of the filter node'
     )
     
@@ -41,7 +41,19 @@ def generate_launch_description():
         default_value='/mux/cmd_vel',
         description='Output topic name'
     )
-    
+
+    filter_1_arg = DeclareLaunchArgument(
+        'filter_1',
+        default_value='avg',
+        description='Filter to apply to linear velocity'
+    )
+
+    filter_2_arg = DeclareLaunchArgument(
+        'filter_2',
+        default_value='lp',
+        description='Filter to apply to angular velocity'
+    )
+
     active_filters = LaunchConfiguration('active_filters')
     filter_config = LaunchConfiguration('filter_config')
     filter_name = LaunchConfiguration('filter_name')
@@ -50,25 +62,30 @@ def generate_launch_description():
     
     filter_node = Node(
         package='twist_filter',
-        executable='init_fir.py',
+        executable='init_combo.py',
         name=filter_name,
         parameters=[
-            active_filters,
-            filter_config
+            active_filters, 
+            filter_config,
+            {
+                'filter_1': LaunchConfiguration('filter_1'),
+                'filter_2': LaunchConfiguration('filter_2'),
+            }
         ],
         remappings=[
             ('filter_in', input_topic),
-            ('filter_out', output_topic)
+            ('filter_out', output_topic),
         ],
         output='screen'
-
     )
-
+    
     return LaunchDescription([
         active_filters_arg,
         filter_config_arg,
         filter_name_arg,
         input_topic_arg,
         output_topic_arg,
-        filter_node
+        filter_node,
+        filter_1_arg,
+        filter_2_arg
     ])

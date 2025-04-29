@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import math
 import copy
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, TwistStamped
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 import threading
-import rclpy
 from rcl_interfaces.msg import SetParametersResult
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 
 class TwistFilter:
@@ -28,28 +28,36 @@ class TwistFilter:
 
         self.time_prev = self.node.get_clock().now()
         self.twist_prev = Twist()
+        qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE
+        )
 
         self.sub_cmd_in = self.node.create_subscription(
             Twist,
             'filter_in',
             self.update_twist,
-            10
+            1
         )
         self.pub_cmd_out = self.node.create_publisher(
             Twist,
             'filter_out',
-            10
+            qos
         )
 
         # Uncomment to publish smoothed twist without velocity/acceleration filtering
-        # self.pub_cmd_smoothed = self.node.create_publisher(Twist, 'filter_smooth', 10)
+        # self.pub_cmd_smoothed = self.node.create_publisher(TwistStamped, 'filter_smooth', 1)
 
         self.stopped = False
         self.cmd = Twist()
         self.prev_time = self.node.get_clock().now()
-        self.cmd_publisher = self.node.create_timer(1.0/10.0, self.pub_cmd)
 
-        self.node.get_logger().info(f'{self.node.get_name()}: Twist filters ready!')
+        timer_period = 0.1
+        self.timer = self.node.create_timer(timer_period, self.timer_callback)
+
+    def timer_callback(self):
+        self.pub_cmd()
 
     def _declare_parameters(self):
         """Declare all the parameters for the filter"""
@@ -72,7 +80,6 @@ class TwistFilter:
         """Callback for parameter updates"""
 
         for param in params:
-            print(param.name)
             if param.name == 'linear_vel_max':
                 self.linear_vel_max = param.value
             elif param.name == 'linear_acc_max':
@@ -84,7 +91,12 @@ class TwistFilter:
             elif param.name == 'timeout':
                 self.timeout = param.value
 
-        result = self.filters.update_filters(params)
+        if isinstance(self.filters, list):
+            self.node.get_logger().info("Updating filter list")
+            for filter in self.filters:
+                result = filter.update_filters(params)
+        else:
+            result = self.filters.update_filters(params)
 
         self.node.get_logger().info(
             f"Filter Reconfigure: Linear vel max: {self.linear_vel_max}, "
@@ -131,18 +143,29 @@ class TwistFilter:
     def filter_twist(self, data):
         cmd_out = Twist()
         time_filter = self.node.get_clock().now().nanoseconds
-        for key in self.filters.linear:
+        if isinstance(self.filters, list):
+            filter_lin = self.filters[0]
+            filter_ang = self.filters[1]
+        else:
+            filter_lin = self.filters
+            filter_ang = self.filters
+
+        for key in filter_lin.linear:
             input_val = float(getattr(data.linear, key))
-            filtered_val = float(self.filters.linear[key].filter_signal(input_val, time_filter, advanced_filter=False))
+            filtered_val = float(filter_lin.linear[key].filter_signal(input_val, time_filter))
             setattr(cmd_out.linear, key, filtered_val)
 
-        for key in self.filters.angular:
+        for key in filter_ang.angular:
             input_val = float(getattr(data.angular, key))
-            filtered_val = float(self.filters.angular[key].filter_signal(input_val, time_filter, advanced_filter=True))
+            filtered_val = float(filter_ang.angular[key].filter_signal(input_val, time_filter))
 
             setattr(cmd_out.angular, key, filtered_val)
+
         # Uncomment to publish smoothed twist without velocity/acceleration filtering
-        # self.pub_cmd_smoothed.publish(cmd_out)
+        cmd_out_stamped = TwistStamped()
+        cmd_out_stamped.header.stamp = self.node.get_clock().now().to_msg()
+        cmd_out_stamped.twist = cmd_out
+        # self.pub_cmd_smoothed.publish(cmd_out_stamped)
 
         time_now = self.node.get_clock().now()
         time_delta = (time_now.nanoseconds - self.time_prev.nanoseconds) / 1e9

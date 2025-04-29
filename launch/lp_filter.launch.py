@@ -10,7 +10,7 @@ def generate_launch_description():
         'active_filters',
         default_value=PathJoinSubstitution([
             FindPackageShare('twist_filter'),
-            'config', 'active_filters_default_fir.yaml'
+            'config', 'active_filters_default_lp.yaml'
         ]),
         description='Path to active filters configuration file'
     )
@@ -19,14 +19,14 @@ def generate_launch_description():
         'filter_config',
         default_value=PathJoinSubstitution([
             FindPackageShare('twist_filter'),
-            'config', 'default_fir.yaml'
+            'config', 'default_lp.yaml'
         ]),
         description='Path to filter configuration file'
     )
     
     filter_name_arg = DeclareLaunchArgument(
         'filter_name',
-        default_value='fir_twist_filter',
+        default_value='lp_twist_filter',
         description='Name of the filter node'
     )
     
@@ -50,7 +50,7 @@ def generate_launch_description():
     
     filter_node = Node(
         package='twist_filter',
-        executable='init_fir.py',
+        executable='init_lp.py',
         name=filter_name,
         parameters=[
             active_filters,
