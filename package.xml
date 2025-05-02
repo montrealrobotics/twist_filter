@@ -3,22 +3,18 @@
 <package format="3">
   <name>twist_filter</name>
   <version>0.0.0</version>
-  <description>The twist_filter package</description>
-
-  <maintainer email="aamirhatim@todo.todo">aamirhatim</maintainer>
-
-  <license>TODO</license>
+  <description>
+    A ROS 2 node for filtering twist messages with various filter types (LP, FIR, IIR)
+  </description>
+  <maintainer email="your-email@example.com">Your Name</maintainer>
+  <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>ament_cmake_python</buildtool_depend>
-  <depend>geometry_msgs</depend>
-  <depend>rclpy</depend>
-  <depend>std_msgs</depend>
-  <depend>rosidl_default_generators</depend>
-  <depend>rosidl_default_runtime</depend>
 
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>nlohmann_json</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

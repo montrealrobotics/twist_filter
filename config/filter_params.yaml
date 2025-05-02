@@ -1,0 +1,40 @@
+twist_filter:
+  ros__parameters:
+    filter_linear: "avg"
+    filter_angular: "lp"
+    
+    # Which components to filter
+    active_filters:
+      linear:
+        x: true
+        y: false
+        z: false
+      angular:
+        x: false
+        y: false
+        z: true
+    
+    linear_vel_max: 1.0
+    linear_acc_max: 1.0
+    angular_vel_max: 1.0
+    angular_acc_max: 1.0
+    timeout: 0.25
+    
+    filter_linear.tau: 0.5
+    filter_linear.damping: 0.8
+    filter_linear.num_samples: 5
+    filter_linear.weights: "[]"
+    filter_linear.num_out_samples: 2
+    filter_linear.out_weights: "[]"
+    
+    filter_angular.tau: 0.5
+    filter_angular.damping: 0.8
+    filter_angular.num_samples: 5
+    filter_angular.weights: "[]"
+    filter_angular.num_out_samples: 2
+    filter_angular.out_weights: "[]"
+
+    # filter_linear.num_samples: 10
+    # filter_linear.weights: '[0.35, 0.15, 0.1, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05]'
+    # filter_linear.num_out_samples: 5
+    # filter_linear.out_weights: '[0.1, 0.2, 0.2, 0.25, 0.25]'
