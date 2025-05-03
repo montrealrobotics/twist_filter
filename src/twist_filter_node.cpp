@@ -1,4 +1,4 @@
-// combo_twist_filter_node.cpp
+// twist_filter_node.cpp
 #include <memory>
 #include <map>
 #include <string>

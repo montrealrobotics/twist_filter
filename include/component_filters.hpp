@@ -1,4 +1,3 @@
-// component_filters.hpp
 #pragma once
 
 #include <map>
@@ -8,6 +7,7 @@
 #include <cmath>
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/parameter.hpp"
+#include "geometry_msgs/msg/vector3.hpp"
 
 class FilterBase;
 class FIRFilter;
@@ -19,6 +19,9 @@ class TwistFilterObjectBase
 public:
   virtual ~TwistFilterObjectBase() = default;
   virtual bool update_filters(const std::vector<rclcpp::Parameter> &parameters) = 0;
+  virtual void filter_vector(const geometry_msgs::msg::Vector3 &input,
+                             geometry_msgs::msg::Vector3 &output,
+                             int64_t time_ns) = 0;
 };
 
 class FilterBase
@@ -29,7 +32,7 @@ public:
 
   std::string to_string() const;
   void update_samples(double data);
-  virtual double get_result();
+  virtual double get_result() = 0;
   virtual double filter_signal(double data, int64_t time);
   virtual void reset(int num_samples, const std::vector<double> &weights);
 
@@ -90,11 +93,15 @@ private:
 class FIRTwistFilterObject : public TwistFilterObjectBase
 {
 public:
+  virtual ~FIRTwistFilterObject();
   FIRTwistFilterObject(const std::map<std::string, std::map<std::string, bool>> &active_filters,
                        const std::map<std::string, std::string> &config);
 
   bool update_filters(const std::vector<rclcpp::Parameter> &parameters) override;
   void reset_filters(int num_samples, const std::vector<double> &weights);
+  void filter_vector(const geometry_msgs::msg::Vector3 &input,
+                     geometry_msgs::msg::Vector3 &output,
+                     int64_t time_ns) override;
 
   std::map<std::string, std::shared_ptr<FIRFilter>> linear;
   std::map<std::string, std::shared_ptr<FIRFilter>> angular;
@@ -105,27 +112,35 @@ public:
 class LPTwistFilterObject : public TwistFilterObjectBase
 {
 public:
+  virtual ~LPTwistFilterObject();
   LPTwistFilterObject(const std::map<std::string, std::map<std::string, bool>> &active_filters,
                       const std::map<std::string, double> &config);
 
   bool update_filters(const std::vector<rclcpp::Parameter> &parameters) override;
   void reset_filters(double tau, double damping);
+  void filter_vector(const geometry_msgs::msg::Vector3 &input,
+                     geometry_msgs::msg::Vector3 &output,
+                     int64_t time_ns) override;
 
   std::map<std::string, std::shared_ptr<LPFilter>> linear;
   std::map<std::string, std::shared_ptr<LPFilter>> angular;
-  double tau;
-  double damping;
+  double tau_param_;
+  double damping_param_;
 };
 
 class IIRTwistFilterObject : public TwistFilterObjectBase
 {
 public:
+  virtual ~IIRTwistFilterObject();
   IIRTwistFilterObject(const std::map<std::string, std::map<std::string, bool>> &active_filters,
                        const std::map<std::string, std::string> &config);
 
   bool update_filters(const std::vector<rclcpp::Parameter> &parameters) override;
   void reset_filters(int samples, const std::vector<double> &weights,
                      int out_samples, const std::vector<double> &out_weights);
+  void filter_vector(const geometry_msgs::msg::Vector3 &input,
+                     geometry_msgs::msg::Vector3 &output,
+                     int64_t time_ns) override;
 
   std::map<std::string, std::shared_ptr<IIRFilter>> linear;
   std::map<std::string, std::shared_ptr<IIRFilter>> angular;

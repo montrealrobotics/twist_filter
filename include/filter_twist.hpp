@@ -12,6 +12,7 @@
 #include "rcl_interfaces/msg/parameter_type.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "component_filters.hpp"
+#include "rclcpp/node_interfaces/node_parameters_interface.hpp"
 
 class TwistFilter
 {
@@ -29,6 +30,7 @@ private:
   void update_twist(const geometry_msgs::msg::Twist::SharedPtr data);
   void pub_cmd();
   geometry_msgs::msg::Twist filter_twist(const geometry_msgs::msg::Twist &data);
+  rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr cb_;
 
   std::pair<double, double> _get_twist_mag(const geometry_msgs::msg::Twist &v);
   std::pair<double, double> _get_max_ratios(double l_mag, double a_mag, double l_max, double a_max);

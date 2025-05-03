@@ -14,7 +14,7 @@ twist_filter:
         y: false
         z: true
     
-    linear_vel_max: 1.0
+    linear_vel_max: 2.0
     linear_acc_max: 1.0
     angular_vel_max: 1.0
     angular_acc_max: 1.0
