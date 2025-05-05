@@ -20,15 +20,15 @@ twist_filter:
     angular_acc_max: 1.0
     timeout: 0.25
     
-    filter_linear.tau: 0.5
-    filter_linear.damping: 0.8
+    filter_linear.tau: 0.1
+    filter_linear.damping: 0.9
     filter_linear.num_samples: 5
     filter_linear.weights: "[]"
     filter_linear.num_out_samples: 2
     filter_linear.out_weights: "[]"
     
-    filter_angular.tau: 0.5
-    filter_angular.damping: 0.8
+    filter_angular.tau: 0.1
+    filter_angular.damping: 0.9
     filter_angular.num_samples: 5
     filter_angular.weights: "[]"
     filter_angular.num_out_samples: 2
