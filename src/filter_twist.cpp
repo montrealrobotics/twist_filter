@@ -119,10 +119,21 @@ void TwistFilter::pub_cmd()
     auto current_time = node_->get_clock()->now();
     double elapsed = (current_time - prev_time_).seconds();
 
+    bool is_zero = _get_mag(cmd.linear) == 0.0 && _get_mag(cmd.angular) == 0.0;
+    if (is_zero)
+    {
+	geometry_msgs::msg::Twist cmd = geometry_msgs::msg::Twist();
+	cmd.linear.x = 0.0;
+	cmd.linear.y = 0.0;
+	cmd.linear.z = 0.0;
+	cmd.angular.x = 0.0;
+	cmd.angular.y = 0.0;
+	cmd.angular.z = 0.0;
+	pub_cmd_out_->publish(cmd);
+	return;
+    }
     geometry_msgs::msg::Twist cmd = (elapsed > timeout_) ? geometry_msgs::msg::Twist() : cmd_;
     cmd = filter_twist(cmd);
-
-    bool is_zero = _get_mag(cmd.linear) == 0.0 && _get_mag(cmd.angular) == 0.0;
 
     if (!is_zero || !stopped_)
     {
