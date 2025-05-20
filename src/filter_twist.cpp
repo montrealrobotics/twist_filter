@@ -119,7 +119,7 @@ void TwistFilter::pub_cmd()
     auto current_time = node_->get_clock()->now();
     double elapsed = (current_time - prev_time_).seconds();
 
-    bool is_zero = _get_mag(cmd.linear) == 0.0 && _get_mag(cmd.angular) == 0.0;
+    bool is_zero = _get_mag(cmd_.linear) == 0.0 && _get_mag(cmd_.angular) == 0.0;
     if (is_zero)
     {
 	geometry_msgs::msg::Twist cmd = geometry_msgs::msg::Twist();
