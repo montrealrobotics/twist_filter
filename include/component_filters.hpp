@@ -41,7 +41,7 @@ public:
 protected:
   int num_samples_;
   std::vector<double> samples_;
-  double last_sent_vel_;
+  double last_sent_velocity_;
 };
 
 class FIRFilter : public FilterBase

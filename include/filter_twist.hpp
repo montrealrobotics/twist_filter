@@ -25,21 +25,18 @@ public:
 
 private:
   void timer_callback();
-  void _declare_parameters();
-  rcl_interfaces::msg::SetParametersResult _parameters_callback(const std::vector<rclcpp::Parameter> &params);
+  void declare_parameters();
+  rcl_interfaces::msg::SetParametersResult parameters_callback(const std::vector<rclcpp::Parameter> &params);
   void update_twist(const geometry_msgs::msg::Twist::SharedPtr data);
   void pub_cmd();
   geometry_msgs::msg::Twist filter_twist(const geometry_msgs::msg::Twist &data);
   rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr cb_;
 
-  std::pair<double, double> _get_twist_mag(const geometry_msgs::msg::Twist &v);
-  std::pair<double, double> _get_max_ratios(double l_mag, double a_mag, double l_max, double a_max);
-  std::vector<double> _get_scaling_order(const std::vector<double> &ratios);
-  geometry_msgs::msg::Twist _saturate_vel(const geometry_msgs::msg::Twist &v, double l_max, double a_max);
-  double _get_mag(const geometry_msgs::msg::Vector3 &v_comp);
-  geometry_msgs::msg::Twist _saturate_acc(const geometry_msgs::msg::Twist &v, double l_max, double a_max, double time_delta);
-  geometry_msgs::msg::Twist _get_acc(const geometry_msgs::msg::Twist &v, double time_delta);
-  double _get_slope(double current, double prev, double step);
+  geometry_msgs::msg::Twist saturate_vel(const geometry_msgs::msg::Twist &v, double l_max, double a_max);
+  double get_magnitude(const geometry_msgs::msg::Vector3 &v_comp);
+  geometry_msgs::msg::Twist saturate_acc(const geometry_msgs::msg::Twist &v, double l_max, double a_max, double time_delta);
+  geometry_msgs::msg::Twist get_acc(const geometry_msgs::msg::Twist &v, double time_delta);
+  double get_slope(double current, double prev, double step);
 
   rclcpp::Node *node_;
   std::shared_ptr<TwistFilterObjectBase> linear_filter_;

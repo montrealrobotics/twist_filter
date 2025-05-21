@@ -7,7 +7,7 @@
 
 using json = nlohmann::json;
 
-FilterBase::FilterBase(int num_samples) : num_samples_(num_samples), last_sent_vel_(0.0)
+FilterBase::FilterBase(int num_samples) : num_samples_(num_samples), last_sent_velocity_(0.0)
 {
     samples_.resize(num_samples_, 0.0);
 }
@@ -27,13 +27,15 @@ void FilterBase::reset(int num_samples, const std::vector<double> &weights)
 
 void FilterBase::reset_state()
 {
-    last_sent_vel_ = 0.0;
+    last_sent_velocity_ = 0.0;
+    std::fill(samples_.begin(), samples_.end(), 0.0);
 }
 
 double FilterBase::filter_signal(double data, int64_t time)
 {
     update_samples(data);
-    return get_result();
+    last_sent_velocity_ = get_result();
+    return last_sent_velocity_;
 }
 
 FIRFilter::FIRFilter(int num_samples, const std::vector<double> &weights)
@@ -84,7 +86,8 @@ double IIRFilter::filter_signal(double data, int64_t time)
     double result = get_result();
     if (std::abs(result) < 0.001) result = 0.0;
     update_feedback(result);
-    return result;
+    last_sent_velocity_ = result;
+    return last_sent_velocity_;
 }
 
 void IIRFilter::reset(int num_samples, const std::vector<double> &weights,

@@ -17,10 +17,10 @@ TwistFilter::TwistFilter(rclcpp::Node *node,
       last_val_(0.0),
       stopped_(false)
 {
-    _declare_parameters();
+    declare_parameters();
 
     cb_ = node_->add_on_set_parameters_callback(
-        std::bind(&TwistFilter::_parameters_callback, this, std::placeholders::_1));
+        std::bind(&TwistFilter::parameters_callback, this, std::placeholders::_1));
 
     time_prev_ = node_->get_clock()->now();
 
@@ -40,7 +40,7 @@ TwistFilter::TwistFilter(rclcpp::Node *node,
         std::bind(&TwistFilter::timer_callback, this));
 }
 
-rcl_interfaces::msg::SetParametersResult TwistFilter::_parameters_callback(
+rcl_interfaces::msg::SetParametersResult TwistFilter::parameters_callback(
     const std::vector<rclcpp::Parameter> &params)
 {
     for (const auto &param : params)
@@ -76,10 +76,10 @@ geometry_msgs::msg::Twist TwistFilter::filter_twist(const geometry_msgs::msg::Tw
     double time_delta = (time_now - time_prev_).seconds();
 
     if (linear_vel_max_ > 0 || angular_vel_max_ > 0)
-        cmd_out = _saturate_vel(cmd_out, linear_vel_max_, angular_vel_max_);
+        cmd_out = saturate_vel(cmd_out, linear_vel_max_, angular_vel_max_);
 
     if ((linear_acc_max_ > 0 || angular_acc_max_ > 0) && time_delta > 1e-5)
-        cmd_out = _saturate_acc(cmd_out, linear_acc_max_, angular_acc_max_, time_delta);
+        cmd_out = saturate_acc(cmd_out, linear_acc_max_, angular_acc_max_, time_delta);
 
     twist_prev_ = cmd_out;
     time_prev_ = time_now;
@@ -89,7 +89,7 @@ geometry_msgs::msg::Twist TwistFilter::filter_twist(const geometry_msgs::msg::Tw
 
 void TwistFilter::timer_callback() { pub_cmd(); }
 
-void TwistFilter::_declare_parameters()
+void TwistFilter::declare_parameters()
 {
     rcl_interfaces::msg::ParameterDescriptor d;
     d.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
@@ -119,8 +119,8 @@ void TwistFilter::pub_cmd()
     auto current_time = node_->get_clock()->now();
     double elapsed = (current_time - prev_time_).seconds();
 
-    bool is_zero = _get_mag(cmd_.linear) == 0.0 && _get_mag(cmd_.angular) == 0.0;
-    if (is_zero)
+    bool is_zero = get_magnitude(cmd_.linear) == 0.0 && get_magnitude(cmd_.angular) == 0.0;
+    if (is_zero && !stopped_)
     {
         geometry_msgs::msg::Twist cmd = geometry_msgs::msg::Twist();
         cmd.linear.x = 0.0;
@@ -132,6 +132,7 @@ void TwistFilter::pub_cmd()
         pub_cmd_out_->publish(cmd);
         linear_filter_->reset_state();
         angular_filter_->reset_state();
+        stopped_ = true;
         return;
     }
     geometry_msgs::msg::Twist cmd = (elapsed > timeout_) ? geometry_msgs::msg::Twist() : cmd_;
@@ -144,21 +145,21 @@ void TwistFilter::pub_cmd()
     }
 }
 
-double TwistFilter::_get_mag(const geometry_msgs::msg::Vector3 &v)
+double TwistFilter::get_magnitude(const geometry_msgs::msg::Vector3 &v)
 {
     return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
-geometry_msgs::msg::Twist TwistFilter::_saturate_vel(const geometry_msgs::msg::Twist &v, double l_max, double a_max)
+geometry_msgs::msg::Twist TwistFilter::saturate_vel(const geometry_msgs::msg::Twist &v, double l_max, double a_max)
 {
     geometry_msgs::msg::Twist sat = v;
-    double mag = _get_mag(sat.linear);
+    double mag = get_magnitude(sat.linear);
     if (mag > l_max)
     {
         double r = l_max / mag;
         sat.linear.x *= r; sat.linear.y *= r; sat.linear.z *= r;
     }
-    mag = _get_mag(sat.angular);
+    mag = get_magnitude(sat.angular);
     if (mag > a_max)
     {
         double r = a_max / mag;
@@ -167,18 +168,18 @@ geometry_msgs::msg::Twist TwistFilter::_saturate_vel(const geometry_msgs::msg::T
     return sat;
 }
 
-geometry_msgs::msg::Twist TwistFilter::_saturate_acc(const geometry_msgs::msg::Twist &v, double l_max, double a_max, double dt)
+geometry_msgs::msg::Twist TwistFilter::saturate_acc(const geometry_msgs::msg::Twist &v, double l_max, double a_max, double dt)
 {
-    geometry_msgs::msg::Twist acc = _get_acc(v, dt);
+    geometry_msgs::msg::Twist acc = get_acc(v, dt);
     geometry_msgs::msg::Twist sat;
 
-    double mag = _get_mag(acc.linear);
+    double mag = get_magnitude(acc.linear);
     if (mag > l_max)
     {
         double r = l_max / mag;
         acc.linear.x *= r; acc.linear.y *= r; acc.linear.z *= r;
     }
-    mag = _get_mag(acc.angular);
+    mag = get_magnitude(acc.angular);
     if (mag > a_max)
     {
         double r = a_max / mag;
@@ -195,19 +196,19 @@ geometry_msgs::msg::Twist TwistFilter::_saturate_acc(const geometry_msgs::msg::T
     return sat;
 }
 
-geometry_msgs::msg::Twist TwistFilter::_get_acc(const geometry_msgs::msg::Twist &v, double dt)
+geometry_msgs::msg::Twist TwistFilter::get_acc(const geometry_msgs::msg::Twist &v, double dt)
 {
     geometry_msgs::msg::Twist a;
-    a.linear.x = _get_slope(v.linear.x, twist_prev_.linear.x, dt);
-    a.linear.y = _get_slope(v.linear.y, twist_prev_.linear.y, dt);
-    a.linear.z = _get_slope(v.linear.z, twist_prev_.linear.z, dt);
-    a.angular.x = _get_slope(v.angular.x, twist_prev_.angular.x, dt);
-    a.angular.y = _get_slope(v.angular.y, twist_prev_.angular.y, dt);
-    a.angular.z = _get_slope(v.angular.z, twist_prev_.angular.z, dt);
+    a.linear.x = get_slope(v.linear.x, twist_prev_.linear.x, dt);
+    a.linear.y = get_slope(v.linear.y, twist_prev_.linear.y, dt);
+    a.linear.z = get_slope(v.linear.z, twist_prev_.linear.z, dt);
+    a.angular.x = get_slope(v.angular.x, twist_prev_.angular.x, dt);
+    a.angular.y = get_slope(v.angular.y, twist_prev_.angular.y, dt);
+    a.angular.z = get_slope(v.angular.z, twist_prev_.angular.z, dt);
     return a;
 }
 
-double TwistFilter::_get_slope(double current, double prev, double dt)
+double TwistFilter::get_slope(double current, double prev, double dt)
 {
     return (current - prev) / dt;
 }
