@@ -25,6 +25,11 @@ void FilterBase::reset(int num_samples, const std::vector<double> &weights)
     samples_.assign(num_samples_, 0.0);
 }
 
+void FilterBase::reset_state()
+{
+    last_sent_vel_ = 0.0;
+}
+
 double FilterBase::filter_signal(double data, int64_t time)
 {
     update_samples(data);
@@ -127,6 +132,13 @@ void LPFilter::reset(double tau, double damping)
     damping_factor_ = damping;
 }
 
+void LPFilter::reset_state()
+{
+    prev_acceleration_ = 0.0;
+    prev_time_ = 0;
+    last_sent_velocity_ = 0.0;
+}
+
 FIRTwistFilterObject::FIRTwistFilterObject(
     const std::map<std::string, std::map<std::string, bool>> &active_filters,
     const std::map<std::string, std::string> &config)
@@ -139,6 +151,12 @@ FIRTwistFilterObject::FIRTwistFilterObject(
 
     for (const auto &[axis, enabled] : active_filters.at("angular"))
         if (enabled) angular[axis] = std::make_shared<FIRFilter>(num_samples, weights);
+}
+
+void FIRTwistFilterObject::reset_state()
+{
+    for (auto &[_, filter] : linear) filter->reset_state();
+    for (auto &[_, filter] : angular) filter->reset_state();
 }
 
 bool FIRTwistFilterObject::update_filters(const std::vector<rclcpp::Parameter> &parameters)
@@ -191,6 +209,12 @@ IIRTwistFilterObject::IIRTwistFilterObject(
 
     for (const auto &[axis, enabled] : active_filters.at("angular"))
         if (enabled) angular[axis] = std::make_shared<IIRFilter>(num_samples, weights, num_out_samples, out_weights);
+}
+
+void IIRTwistFilterObject::reset_state()
+{
+    for (auto &[_, filter] : linear) filter->reset_state();
+    for (auto &[_, filter] : angular) filter->reset_state();
 }
 
 bool IIRTwistFilterObject::update_filters(const std::vector<rclcpp::Parameter> &parameters)
@@ -258,6 +282,12 @@ bool LPTwistFilterObject::update_filters(const std::vector<rclcpp::Parameter> &p
         filter->reset(tau_param_, damping_param_);
 
     return true;
+}
+
+void LPTwistFilterObject::reset_state()
+{
+    for (auto &[_, filter] : linear) filter->reset_state();
+    for (auto &[_, filter] : angular) filter->reset_state();
 }
 
 template <typename FilterT>

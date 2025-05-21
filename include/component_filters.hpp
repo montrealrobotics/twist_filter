@@ -19,6 +19,7 @@ class TwistFilterObjectBase
 public:
   virtual ~TwistFilterObjectBase() = default;
   virtual bool update_filters(const std::vector<rclcpp::Parameter> &parameters) = 0;
+  virtual void reset_state() = 0;
   virtual void filter_vector(const geometry_msgs::msg::Vector3 &input,
                              geometry_msgs::msg::Vector3 &output,
                              int64_t time_ns) = 0;
@@ -35,6 +36,7 @@ public:
   virtual double get_result() = 0;
   virtual double filter_signal(double data, int64_t time);
   virtual void reset(int num_samples, const std::vector<double> &weights);
+  void reset_state();
 
 protected:
   int num_samples_;
@@ -78,6 +80,7 @@ public:
   LPFilter(double tau, double damping_factor);
   double filter_signal(double data, int64_t current_time);
   void reset(double tau, double damping);
+  void reset_state();
 
 private:
   double low_pass_filter(double acceleration, double dt);
@@ -99,6 +102,7 @@ public:
 
   bool update_filters(const std::vector<rclcpp::Parameter> &parameters) override;
   void reset_filters(int num_samples, const std::vector<double> &weights);
+  void reset_state() override;
   void filter_vector(const geometry_msgs::msg::Vector3 &input,
                      geometry_msgs::msg::Vector3 &output,
                      int64_t time_ns) override;
@@ -118,6 +122,7 @@ public:
 
   bool update_filters(const std::vector<rclcpp::Parameter> &parameters) override;
   void reset_filters(double tau, double damping);
+  void reset_state() override;
   void filter_vector(const geometry_msgs::msg::Vector3 &input,
                      geometry_msgs::msg::Vector3 &output,
                      int64_t time_ns) override;
@@ -138,6 +143,7 @@ public:
   bool update_filters(const std::vector<rclcpp::Parameter> &parameters) override;
   void reset_filters(int samples, const std::vector<double> &weights,
                      int out_samples, const std::vector<double> &out_weights);
+  void reset_state() override;
   void filter_vector(const geometry_msgs::msg::Vector3 &input,
                      geometry_msgs::msg::Vector3 &output,
                      int64_t time_ns) override;
